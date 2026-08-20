@@ -1,0 +1,38 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request: 
+    branches: [ main ]
+
+jobs:
+  build-and-test: 
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+        
+      - name: Check format
+        run: |
+            if [ -n "$(gofmt -l .)" ]; then
+              echo "The following files are not formatted with gofmt:"
+              gofmt -l .
+              exit 1
+            fi
+      - name: Run Lint
+        uses: golangci/golangci-lint-action@v6
+        with: 
+          version: v1.58.2
+
+      - name: Build / Compile
+        run: go build -v ./...
+
+      - name: Run Tests
+        run: go test -v ./...
