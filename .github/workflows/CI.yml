@@ -28,8 +28,6 @@ jobs:
             fi
       - name: Run Lint
         uses: golangci/golangci-lint-action@v6
-        with: 
-          version: v1.60.0
 
       - name: Build / Compile
         run: go build -v ./...
