@@ -17,6 +17,7 @@ type TestSpec struct {
 	Duration    Duration          `json:"duration"`
 	RPS         int               `json:"rps"`
 	Concurrency int               `json:"concurrency"`
+	Workers     int               `json:"workers"`
 }
 
 type Duration struct {
@@ -47,7 +48,8 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func parseSpec(data []byte) (*TestSpec, error) {
+// Parse decodes, normalizes, and validates a test specification.
+func Parse(data []byte) (*TestSpec, error) {
 	var s TestSpec
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, fmt.Errorf("parsing spec: %w", err)
@@ -98,6 +100,10 @@ func (s TestSpec) Validate() error {
 
 	if s.Concurrency <= 0 {
 		errs = append(errs, "concurrency must be positive")
+	}
+
+	if s.Workers <= 0 {
+		errs = append(errs, "workers must be positive")
 	}
 
 	if len(errs) > 0 {
