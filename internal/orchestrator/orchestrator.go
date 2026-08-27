@@ -13,16 +13,10 @@ import (
 type Orchestrator interface {
 	LoadTestSpec(context.Context, string) (*spec.TestSpec, error)
 	CreateWorkerAssignments(spec.TestSpec) ([]WorkerAssignment, error)
+	Run(context.Context, spec.TestSpec) ([]WorkerResult, error)
 }
 
 type Service struct{}
-
-// WorkerAssignment is the configuration supplied to a worker
-type WorkerAssignment struct {
-	WorkerID string        `json:"worker_id"`
-	RPS      int           `json:"rps"`
-	TestSpec spec.TestSpec `json:"test_spec"`
-}
 
 func New() Orchestrator {
 	return Service{}
@@ -41,7 +35,7 @@ func (Service) LoadTestSpec(ctx context.Context, path string) (*spec.TestSpec, e
 	return spec.Parse(data)
 }
 
-// Creates Worker Assignments, distributes the RPS evenly with remainder given to the earliest created workers
+// CreateWorkerAssignments - distributes the RPS evenly with remainder given to the earliest created workers
 func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignment, error) {
 	if err := testSpec.Validate(); err != nil {
 		return nil, err
@@ -67,4 +61,19 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 	}
 
 	return assignments, nil
+}
+
+func (Service) Run(ctx context.Context, testSpec spec.TestSpec) ([]WorkerResult, error) {
+	assignments, err := Service{}.CreateWorkerAssignments(testSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]WorkerResult, 0, len(assignments))
+
+	for _, assignment := range assignments {
+		//code to start workers
+	}
+
+	return results, nil
 }
