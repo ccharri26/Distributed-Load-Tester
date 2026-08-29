@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/ccharri26/Distributed-Load-Tester/internal/spec"
 )
@@ -16,7 +17,7 @@ type Orchestrator interface {
 	Run(context.Context, spec.TestSpec) ([]WorkerResult, error)
 }
 
-type Service struct{}
+type Service struct{ provisioner WorkerProvisioner }
 
 func New() Orchestrator {
 	return Service{}
@@ -63,16 +64,40 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 	return assignments, nil
 }
 
-func (Service) Run(ctx context.Context, testSpec spec.TestSpec) ([]WorkerResult, error) {
+func (s Service) Run(ctx context.Context, testSpec spec.TestSpec) ([]WorkerResult, error) {
 	assignments, err := Service{}.CreateWorkerAssignments(testSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]WorkerResult, 0, len(assignments))
+	results := make([]WorkerResult, len(assignments))
+	errors := make(chan error, len(assignments))
 
-	for _, assignment := range assignments {
-		//code to start workers
+	var wg sync.WaitGroup
+
+	for i, assignment := range assignments {
+		wg.Add(1)
+
+		go func(i int, assignment WorkerAssignment) {
+			defer wg.Done()
+
+			result, err := s.provisioner.RunWorker(ctx, assignment)
+			if err != nil {
+				errors <- err
+				return
+			}
+
+			results[i] = result
+		}(i, assignment)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return results, nil
