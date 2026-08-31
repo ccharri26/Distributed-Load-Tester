@@ -51,3 +51,74 @@ func TestCreateWorkerAssignmentsSplitsRPSExactly(t *testing.T) {
 		t.Logf("worker assignment: id=%s rps=%d", assignment.WorkerID, assignment.RPS)
 	}
 }
+
+type fakeProvisioner struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (f *fakeProvisioner) RunWorker(
+	_ context.Context,
+	assignment WorkerAssignment,
+) (WorkerResult, error) {
+	f.started <- struct{}{}
+	<-f.release
+
+	return WorkerResult{
+		WorkerID: assignment.WorkerID,
+	}, nil
+}
+
+func TestRunStartsWorkersConcurrently(t *testing.T) {
+	const workerCount = 3
+
+	fake := &fakeProvisioner{started: make(chan struct{}, workerCount), release: make(chan struct{})}
+
+	service := Service{
+		provisioner: fake,
+	}
+
+	testSpec := spec.TestSpec{
+		TargetURL:   "https://example.com",
+		Method:      "GET",
+		Duration:    spec.Duration{Duration: time.Second},
+		RPS:         10,
+		Concurrency: 1,
+		Workers:     workerCount,
+	}
+
+	done := make(chan struct{})
+	var (
+		results []WorkerResult
+		err     error
+	)
+
+	go func() {
+		results, err = service.Run(context.Background(), testSpec)
+		close(done)
+	}()
+
+	for range workerCount {
+		select {
+		case <-fake.started:
+		case <-time.After(time.Second):
+			t.Fatal("workers did not start concurrently")
+		}
+	}
+
+	close(fake.release)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Run did not finish")
+	}
+
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+
+	if len(results) != workerCount {
+		t.Fatalf("got %d results, want %d", len(results), workerCount)
+	}
+}

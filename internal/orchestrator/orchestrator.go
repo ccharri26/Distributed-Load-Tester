@@ -65,7 +65,7 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 }
 
 func (s Service) Run(ctx context.Context, testSpec spec.TestSpec) ([]WorkerResult, error) {
-	assignments, err := Service{}.CreateWorkerAssignments(testSpec)
+	assignments, err := s.CreateWorkerAssignments(testSpec)
 	if err != nil {
 		return nil, err
 	}
