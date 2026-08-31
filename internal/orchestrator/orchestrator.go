@@ -19,8 +19,8 @@ type Orchestrator interface {
 
 type Service struct{ provisioner WorkerProvisioner }
 
-func New() Orchestrator {
-	return Service{}
+func New(provisioner WorkerProvisioner) Orchestrator {
+	return Service{provisioner: provisioner}
 }
 
 // LoadTestSpec reads a JSON file and uses shared test spec package to validate
@@ -65,6 +65,11 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 }
 
 func (s Service) Run(ctx context.Context, testSpec spec.TestSpec) ([]WorkerResult, error) {
+
+	if s.provisioner == nil {
+		return nil, fmt.Errorf("worker provisioner is required")
+	}
+
 	assignments, err := s.CreateWorkerAssignments(testSpec)
 	if err != nil {
 		return nil, err

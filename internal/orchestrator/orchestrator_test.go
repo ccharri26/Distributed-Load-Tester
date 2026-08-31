@@ -17,7 +17,7 @@ func TestLoadTestSpec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testSpec, err := New().LoadTestSpec(context.Background(), path)
+	testSpec, err := New(nil).LoadTestSpec(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestCreateWorkerAssignmentsSplitsRPSExactly(t *testing.T) {
 		Workers:     3,
 	}
 
-	assignments, err := New().CreateWorkerAssignments(testSpec)
+	assignments, err := New(nil).CreateWorkerAssignments(testSpec)
 	if err != nil {
 		t.Fatal(err)
 	}
