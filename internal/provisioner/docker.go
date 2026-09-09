@@ -78,6 +78,8 @@ func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrat
 		client.ContainerWaitOptions{},
 	)
 
+	var statusCode int64
+
 	select {
 	case err := <-wait.Error:
 		if err != nil {
@@ -89,13 +91,7 @@ func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrat
 		}
 
 	case status := <-wait.Result:
-		if status.StatusCode != 0 {
-			return orchestrator.WorkerResult{}, fmt.Errorf(
-				"worker %q exited with status %d",
-				assignment.WorkerID,
-				status.StatusCode,
-			)
-		}
+		statusCode = status.StatusCode
 	}
 
 	logs, err := p.client.ContainerLogs(ctx, created.ID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
@@ -112,6 +108,16 @@ func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrat
 			"copy worker %q logs: %w",
 			assignment.WorkerID,
 			err,
+		)
+	}
+
+	if statusCode != 0 {
+		return orchestrator.WorkerResult{}, fmt.Errorf(
+			"worker %q exited with status %d; stderr: %s; stdout: %s",
+			assignment.WorkerID,
+			statusCode,
+			stderr.String(),
+			stdout.String(),
 		)
 	}
 
