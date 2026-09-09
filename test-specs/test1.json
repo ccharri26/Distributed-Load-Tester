@@ -1,0 +1,12 @@
+{
+  "id": "test-001",
+  "target_url": "https://example.com",
+  "method": "GET",
+  "headers": {
+    "Accept": "application/json"
+  },
+  "duration": "30s",
+  "rps": 100,
+  "concurrency": 20,
+  "workers": 3
+}
