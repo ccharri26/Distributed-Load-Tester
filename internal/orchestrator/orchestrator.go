@@ -1,5 +1,4 @@
-// Package orchestrator coordinates a load-test run. Worker provisioning and
-// execution will be added behind this boundary later.
+// Package orchestrator coordinates a load-test run
 package orchestrator
 
 import (
@@ -14,7 +13,7 @@ import (
 type Orchestrator interface {
 	LoadTestSpec(context.Context, string) (*spec.TestSpec, error)
 	CreateWorkerAssignments(spec.TestSpec) ([]WorkerAssignment, error)
-	Run(context.Context, spec.TestSpec) ([]WorkerResult, error)
+	Run(ctx context.Context, path string) ([]WorkerResult, error)
 }
 
 type Service struct{ provisioner WorkerProvisioner }
@@ -64,13 +63,18 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 	return assignments, nil
 }
 
-func (s Service) Run(ctx context.Context, testSpec spec.TestSpec) ([]WorkerResult, error) {
+func (s Service) Run(ctx context.Context, path string) ([]WorkerResult, error) {
 
 	if s.provisioner == nil {
 		return nil, fmt.Errorf("worker provisioner is required")
 	}
 
-	assignments, err := s.CreateWorkerAssignments(testSpec)
+	spec, err := s.LoadTestSpec(ctx, "test-specs/test1.json")
+	if err != nil {
+		return nil, err
+	}
+
+	assignments, err := s.CreateWorkerAssignments(*spec)
 	if err != nil {
 		return nil, err
 	}
