@@ -33,8 +33,8 @@ func main() {
 		"How long to run the test",
 	)
 
-	concurrency := flag.Int(
-		"concurrency",
+	numberOfWorkers := flag.Int(
+		"number_of_workers",
 		10,
 		"Maximum concurrent requests",
 	)
@@ -42,11 +42,11 @@ func main() {
 	flag.Parse()
 
 	testSpec := spec.TestSpec{
-		TargetURL:   *targetURL,
-		Method:      *method,
-		RPS:         *rps,
-		Duration:    spec.Duration{Duration: *duration},
-		Concurrency: *concurrency,
+		TargetURL:       *targetURL,
+		Method:          *method,
+		RPS:             *rps,
+		Duration:        spec.Duration{Duration: *duration},
+		NumberOfWorkers: *numberOfWorkers,
 	}
 
 	testSpec.ApplyDefaults()

@@ -9,14 +9,14 @@ import (
 )
 
 type TestSpec struct {
-	ID          string            `json:"id"`
-	TargetURL   string            `json:"target_url"`
-	Method      string            `json:"method"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Body        string            `json:"body,omitempty"`
-	Duration    Duration          `json:"duration"`
-	RPS         int               `json:"rps"`
-	Concurrency int               `json:"concurrency"`
+	ID              string            `json:"id"`
+	TargetURL       string            `json:"target_url"`
+	Method          string            `json:"method"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	Body            string            `json:"body,omitempty"`
+	Duration        Duration          `json:"duration"`
+	RPS             int               `json:"rps"`
+	NumberOfWorkers int               `json:"number_of_workers"`
 }
 
 type Duration struct {
@@ -47,7 +47,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func parseSpec(data []byte) (*TestSpec, error) {
+func ParseSpec(data []byte) (*TestSpec, error) {
 	var s TestSpec
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, fmt.Errorf("parsing spec: %w", err)
@@ -68,8 +68,8 @@ func (s *TestSpec) ApplyDefaults() {
 	if s.Method == "" {
 		s.Method = "GET"
 	}
-	if s.Concurrency == 0 {
-		s.Concurrency = 10
+	if s.NumberOfWorkers == 0 {
+		s.NumberOfWorkers = 10
 	}
 }
 
@@ -96,8 +96,8 @@ func (s TestSpec) Validate() error {
 		errs = append(errs, "rps must be positive")
 	}
 
-	if s.Concurrency <= 0 {
-		errs = append(errs, "concurrency must be positive")
+	if s.NumberOfWorkers <= 0 {
+		errs = append(errs, "number_of_workers must be positive")
 	}
 
 	if len(errs) > 0 {
