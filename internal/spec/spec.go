@@ -25,14 +25,15 @@ type Duration struct {
 }
 
 func (d Duration) MarshalJSON() ([]byte, error) {
-	type Alias Duration
+	/*type Alias Duration
 	return json.Marshal(&struct {
 		Duration string `json:"duration"`
 		*Alias
 	}{
 		Duration: d.String(),
 		Alias:    (*Alias)(&d),
-	})
+	}) */
+	return json.Marshal(d.String())
 }
 
 func (d *Duration) UnmarshalJSON(b []byte) error {
