@@ -12,6 +12,8 @@ import (
 
 // responsibilities: create go routines, build request, send request, collect metrics, report metrics
 
+const NUMBER_OF_ROUTINES = 10
+
 type Generator struct {
 	spec   spec.TestSpec
 	client *http.Client
@@ -36,7 +38,7 @@ func NewGenerator(testSpec spec.TestSpec, testClient *http.Client) *Generator {
 	}
 }
 
-func (g *Generator) RunTest() error {
+func (g *Generator) RunTest(ctx context.Context) error {
 
 	return nil
 }
@@ -48,8 +50,8 @@ func (g *Generator) SendRequest(ctx context.Context) RequestResult {
 	req, err := http.NewRequestWithContext(ctx, g.spec.Method, g.spec.TargetURL, strings.NewReader(g.spec.Body))
 	if err != nil {
 		return RequestResult{
-			Success: false,
-			Err:     err,
+			Success:  false,
+			Err:      err,
 			Duration: -1 * time.Second,
 		}
 	}
