@@ -12,9 +12,14 @@ type Collector struct {
 
 func (c *Collector) RecordStart() {
 	c.summary.StartedRequests++
+	c.summary.ScheduledRequests++
 }
 
 func (c *Collector) RecordResult(result RequestResult) {
+	if c.summary.StartedRequests == 0 {
+		return
+	}
+
 	c.summary.CompletedRequests++
 
 	if result.Success {
@@ -23,24 +28,30 @@ func (c *Collector) RecordResult(result RequestResult) {
 		c.summary.FailedRequests++
 	}
 
-	c.durations = append(c.durations, result.Duration)
+	if result.Duration >= 0 {
+		c.durations = append(c.durations, result.Duration)
+	}
 }
 
 func (c *Collector) CompileResults() {
+	if len(c.durations) == 0 {
+		return
+	}
+
 	slices.Sort(c.durations)
 	c.summary.MinRequestDuration = c.durations[0]
 	c.summary.MaxRequestDuration = c.durations[len(c.durations)-1]
 
-	var durationSum time.Duration
-	for _, value := range c.durations {
-		durationSum += value
+	average := c.durations[0]
+	for i := 1; i < len(c.durations); i++ {
+		count := time.Duration(i + 1)
+		average += (c.durations[i] - average) / count
 	}
-
-	c.summary.AverageRequestDuration = durationSum / time.Duration(len(c.durations))
+	c.summary.AverageRequestDuration = average
 
 	c.summary.P50 = Percentile(c.durations, 50)
-	c.summary.P50 = Percentile(c.durations, 90)
-	c.summary.P50 = Percentile(c.durations, 95)
+	c.summary.P95 = Percentile(c.durations, 95)
+	c.summary.P99 = Percentile(c.durations, 99)
 }
 
 func Percentile(durations []time.Duration, p float64) float64 {

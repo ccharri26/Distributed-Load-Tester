@@ -12,7 +12,7 @@ import (
 
 // responsibilities: create go routines, build request, send request, collect metrics, report metrics
 
-const NUMBER_OF_ROUTINES = 10
+const numberOfRoutines = 10
 
 type Generator struct {
 	spec   spec.TestSpec
@@ -38,9 +38,28 @@ func NewGenerator(testSpec spec.TestSpec, testClient *http.Client) *Generator {
 	}
 }
 
-func (g *Generator) RunTest(ctx context.Context) error {
+func (g *Generator) RunTest(ctx context.Context) (Summary, error) {
+	collector := Collector{}
+	deadline := time.Now().Add(g.spec.Duration.Duration)
 
-	return nil
+	for {
+		if !time.Now().Before(deadline) {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			collector.CompileResults()
+			return collector.summary, ctx.Err()
+		default:
+		}
+
+		collector.RecordStart()
+		result := g.SendRequest(ctx)
+		collector.RecordResult(result)
+	}
+	collector.CompileResults()
+	return collector.summary, nil
 }
 
 func (g *Generator) SendRequest(ctx context.Context) RequestResult {
