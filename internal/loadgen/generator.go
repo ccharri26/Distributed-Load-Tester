@@ -2,15 +2,15 @@ package loadgen
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ccharri26/Distributed-Load-Tester/internal/spec"
 )
-
-// responsibilities: create go routines, build request, send request, collect metrics, report metrics
 
 const numberOfRoutines = 10
 
@@ -26,7 +26,6 @@ type RequestResult struct {
 	Err        error
 }
 
-// ig that each worker can pass a context to the generator for sending requests
 func NewGenerator(testSpec spec.TestSpec, testClient *http.Client) *Generator {
 	if testClient == nil {
 		panic("Invalid client passed into generator")
@@ -39,33 +38,111 @@ func NewGenerator(testSpec spec.TestSpec, testClient *http.Client) *Generator {
 }
 
 func (g *Generator) RunTest(ctx context.Context) (Summary, error) {
+	if g.spec.RPS <= 0 {
+		return Summary{}, errors.New("RPS is invalid")
+	}
+
+	if g.spec.Duration.Duration <= 0 {
+		return Summary{}, errors.New("Duration is invalid")
+	}
+
 	collector := Collector{}
-	deadline := time.Now().Add(g.spec.Duration.Duration)
 
-	for {
-		if !time.Now().Before(deadline) {
-			break
+	interval := (1 * time.Second) / time.Duration(g.spec.RPS)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	deadlineAt := time.Now().Add(g.spec.Duration.Duration)
+	deadline := time.NewTimer(g.spec.Duration.Duration)
+
+	var wg sync.WaitGroup
+
+	maxJobs := int(g.spec.Duration.Duration/interval) + 1
+	jobs := make(chan struct{}, maxJobs)
+
+	results := make(chan RequestResult)
+	collectorDone := make(chan struct{})
+
+	// drain the results channel so workers are not blocked
+	go func() {
+		defer close(collectorDone)
+		for result := range results {
+			if time.Now().Before(deadlineAt) {
+				collector.RecordResult(result)
+			} else {
+				collector.RecordLateResult(result)
+			}
 		}
+	}()
 
+	for i := 0; i < numberOfRoutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case <-ctx.Done(): // context cancelled
+					return
+
+				case _, ok := <-jobs:
+					if !ok { // jobs are finished
+						return
+					}
+
+					if ctx.Err() != nil {
+						return
+					}
+
+					collector.RecordStart()
+					result := g.SendRequest(ctx)
+					results <- result
+				}
+			}
+		}()
+	}
+
+	// Feed jobs at the specified rate
+	runErr := error(nil)
+
+scheduleLoop:
+	for {
 		select {
 		case <-ctx.Done():
-			collector.CompileResults()
-			return collector.summary, ctx.Err()
-		default:
-		}
+			runErr = ctx.Err()
+			break scheduleLoop
 
-		collector.RecordStart()
-		result := g.SendRequest(ctx)
-		collector.RecordResult(result)
+		case <-deadline.C:
+			break scheduleLoop
+
+		case <-ticker.C:
+			if !time.Now().Before(deadlineAt) {
+				break scheduleLoop
+			}
+
+			select {
+			case <-ctx.Done():
+				runErr = ctx.Err()
+				break scheduleLoop
+
+			case <-deadline.C:
+				break scheduleLoop
+
+			case jobs <- struct{}{}:
+			}
+		}
 	}
+
+	close(jobs)
+	wg.Wait()
+	close(results)
+	<-collectorDone
+
 	collector.CompileResults()
-	return collector.summary, nil
+	return collector.summary, runErr
 }
 
 func (g *Generator) SendRequest(ctx context.Context) RequestResult {
-	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// defer cancel()
-
 	req, err := http.NewRequestWithContext(ctx, g.spec.Method, g.spec.TargetURL, strings.NewReader(g.spec.Body))
 	if err != nil {
 		return RequestResult{

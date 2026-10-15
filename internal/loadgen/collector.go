@@ -2,20 +2,28 @@ package loadgen
 
 import (
 	"slices"
+	"sync"
 	"time"
 )
 
 type Collector struct {
+	mutex     sync.Mutex
 	summary   Summary
 	durations []time.Duration
 }
 
 func (c *Collector) RecordStart() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	c.summary.StartedRequests++
 	c.summary.ScheduledRequests++
 }
 
 func (c *Collector) RecordResult(result RequestResult) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	if c.summary.StartedRequests == 0 {
 		return
 	}
@@ -33,7 +41,28 @@ func (c *Collector) RecordResult(result RequestResult) {
 	}
 }
 
+func (c *Collector) RecordLateResult(result RequestResult) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.summary.StartedRequests == 0 {
+		return
+	}
+
+	c.summary.LateCompletedRequests++
+
+	if result.Success {
+		c.summary.SuccessfulRequests++
+	} else {
+		c.summary.FailedRequests++
+	}
+}
+
+// Results that arrive after the duration of the test is completed will not be counted in latency metrics.
 func (c *Collector) CompileResults() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	if len(c.durations) == 0 {
 		return
 	}
