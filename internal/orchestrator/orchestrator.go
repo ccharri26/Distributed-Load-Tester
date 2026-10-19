@@ -69,7 +69,7 @@ func (s Service) Run(ctx context.Context, path string) ([]WorkerResult, error) {
 		return nil, fmt.Errorf("worker provisioner is required")
 	}
 
-	spec, err := s.LoadTestSpec(ctx, "test-specs/test1.json")
+	spec, err := s.LoadTestSpec(ctx, path)
 	if err != nil {
 		return nil, err
 	}

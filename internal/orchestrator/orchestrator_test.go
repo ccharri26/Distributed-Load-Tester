@@ -78,13 +78,10 @@ func TestRunStartsWorkersConcurrently(t *testing.T) {
 		provisioner: fake,
 	}
 
-	testSpec := spec.TestSpec{
-		TargetURL:   "https://example.com",
-		Method:      "GET",
-		Duration:    spec.Duration{Duration: time.Second},
-		RPS:         10,
-		Concurrency: 1,
-		Workers:     workerCount,
+	path := filepath.Join(t.TempDir(), "test.json")
+	data := []byte(`{"target_url":"https://example.com","duration":"1s","rps":10,"workers":3}`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 
 	done := make(chan struct{})
@@ -94,7 +91,7 @@ func TestRunStartsWorkersConcurrently(t *testing.T) {
 	)
 
 	go func() {
-		results, err = service.Run(context.Background(), testSpec)
+		results, err = service.Run(context.Background(), path)
 		close(done)
 	}()
 
