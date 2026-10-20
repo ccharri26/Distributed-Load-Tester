@@ -21,7 +21,6 @@ type DockerProvisioner struct {
 func NewDocker(workerImage string) (*DockerProvisioner, error) {
 	dockerClient, err := client.New(
 		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
 	)
 
 	if err != nil {

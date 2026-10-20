@@ -4,6 +4,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -42,6 +43,10 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 	}
 
 	assignments := make([]WorkerAssignment, testSpec.Workers)
+	if testSpec.RPS > testSpec.Workers {
+		log.Fatal("Request per second must be greater than the number of workers")
+	} // log error for now but possibly find a better way to handle this case
+	// Possibly if the RPS is less than the number of workers, default to one worker?
 	baseRPS := testSpec.RPS / testSpec.Workers
 	remainder := testSpec.RPS % testSpec.Workers
 
