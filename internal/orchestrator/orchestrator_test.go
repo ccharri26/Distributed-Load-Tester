@@ -44,11 +44,11 @@ func TestCreateWorkerAssignmentsSplitsRPSExactly(t *testing.T) {
 	if len(assignments) != 3 {
 		t.Fatalf("assignment count = %d, want 3", len(assignments))
 	}
-	if got := []int{assignments[0].RPS, assignments[1].RPS, assignments[2].RPS}; got[0] != 4 || got[1] != 3 || got[2] != 3 {
+	if got := []int{assignments[0].WorkerRPS, assignments[1].WorkerRPS, assignments[2].WorkerRPS}; got[0] != 4 || got[1] != 3 || got[2] != 3 {
 		t.Fatalf("rates = %v, want [4 3 3]", got)
 	}
 	for _, assignment := range assignments {
-		t.Logf("worker assignment: id=%s rps=%d", assignment.WorkerID, assignment.RPS)
+		t.Logf("worker assignment: id=%s rps=%d", assignment.WorkerID, assignment.WorkerRPS)
 	}
 }
 

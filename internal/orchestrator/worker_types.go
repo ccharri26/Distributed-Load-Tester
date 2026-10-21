@@ -2,15 +2,18 @@ package orchestrator
 
 import (
 	"time"
-
-	"github.com/ccharri26/Distributed-Load-Tester/internal/spec"
 )
 
 // WorkerAssignment is the configuration supplied to a worker.
 type WorkerAssignment struct {
-	WorkerID string        `json:"worker_id"`
-	RPS      int           `json:"rps"`
-	TestSpec spec.TestSpec `json:"test_spec"`
+	WorkerID    string            `json:"worker_id"`
+	WorkerRPS   int               `json:"WORKER_RPS"`
+	TargetUrl   string            `json:"TARGET_URL"`
+	Method      string            `json:"METHOD"`
+	Headers     map[string]string `json:"HEADERS"`
+	Body        string            `json:"BODY"`
+	Duration    time.Duration     `json:"DURATION"`
+	Concurrency int               `json:"CONCURRENCY"`
 }
 
 // WorkerResult contains the outcome reported by one worker after a test run.

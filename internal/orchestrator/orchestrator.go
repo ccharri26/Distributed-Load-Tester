@@ -43,7 +43,7 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 	}
 
 	assignments := make([]WorkerAssignment, testSpec.Workers)
-	if testSpec.RPS > testSpec.Workers {
+	if testSpec.RPS < testSpec.Workers {
 		log.Fatal("Request per second must be greater than the number of workers")
 	} // log error for now but possibly find a better way to handle this case
 	// Possibly if the RPS is less than the number of workers, default to one worker?
@@ -59,9 +59,13 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 		workerSpec := testSpec
 		workerSpec.RPS = workerRPS
 		assignments[index] = WorkerAssignment{
-			WorkerID: fmt.Sprintf("worker-%d", index+1),
-			RPS:      workerRPS,
-			TestSpec: workerSpec,
+			WorkerID:    fmt.Sprintf("worker-%d", index+1),
+			WorkerRPS:   workerRPS,
+			TargetUrl:   workerSpec.TargetURL,
+			Method:      workerSpec.Method,
+			Headers:     workerSpec.Headers,
+			Body:        workerSpec.Body,
+			Concurrency: workerSpec.Concurrency,
 		}
 	}
 
