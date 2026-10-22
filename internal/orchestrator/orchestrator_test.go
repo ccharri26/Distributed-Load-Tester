@@ -74,7 +74,7 @@ func TestRunStartsWorkersConcurrently(t *testing.T) {
 
 	fake := &fakeProvisioner{started: make(chan struct{}, workerCount), release: make(chan struct{})}
 
-	service := Service{
+	orchestrator := Orchestrator{
 		provisioner: fake,
 	}
 
@@ -91,7 +91,7 @@ func TestRunStartsWorkersConcurrently(t *testing.T) {
 	)
 
 	go func() {
-		results, err = service.Run(context.Background(), path)
+		results, err = orchestrator.Run(context.Background(), path)
 		close(done)
 	}()
 

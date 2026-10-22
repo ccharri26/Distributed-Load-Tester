@@ -4,27 +4,22 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 
 	"github.com/ccharri26/Distributed-Load-Tester/internal/spec"
 )
 
-type Orchestrator interface {
-	LoadTestSpec(context.Context, string) (*spec.TestSpec, error)
-	CreateWorkerAssignments(spec.TestSpec) ([]WorkerAssignment, error)
-	Run(ctx context.Context, path string) ([]WorkerResult, error)
+type Orchestrator struct {
+	provisioner WorkerProvisioner
 }
 
-type Service struct{ provisioner WorkerProvisioner }
-
 func New(provisioner WorkerProvisioner) Orchestrator {
-	return Service{provisioner: provisioner}
+	return Orchestrator{provisioner: provisioner}
 }
 
 // LoadTestSpec reads a JSON file and uses shared test spec package to validate
-func (Service) LoadTestSpec(ctx context.Context, path string) (*spec.TestSpec, error) {
+func (Orchestrator) LoadTestSpec(ctx context.Context, path string) (*spec.TestSpec, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -37,14 +32,14 @@ func (Service) LoadTestSpec(ctx context.Context, path string) (*spec.TestSpec, e
 }
 
 // CreateWorkerAssignments - distributes the RPS evenly with remainder given to the earliest created workers
-func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignment, error) {
+func (Orchestrator) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignment, error) {
 	if err := testSpec.Validate(); err != nil {
 		return nil, err
 	}
 
 	assignments := make([]WorkerAssignment, testSpec.Workers)
 	if testSpec.RPS < testSpec.Workers {
-		log.Fatal("Request per second must be greater than the number of workers")
+		return nil, fmt.Errorf("RPS must be greater than the number of workers")
 	} // log error for now but possibly find a better way to handle this case
 	// Possibly if the RPS is less than the number of workers, default to one worker?
 	baseRPS := testSpec.RPS / testSpec.Workers
@@ -60,30 +55,33 @@ func (Service) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAssignme
 		workerSpec.RPS = workerRPS
 		assignments[index] = WorkerAssignment{
 			WorkerID:    fmt.Sprintf("worker-%d", index+1),
-			WorkerRPS:   workerRPS,
+			WorkerRPS:   workerSpec.RPS,
 			TargetUrl:   workerSpec.TargetURL,
 			Method:      workerSpec.Method,
 			Headers:     workerSpec.Headers,
 			Body:        workerSpec.Body,
 			Concurrency: workerSpec.Concurrency,
+			Duration:    workerSpec.Duration.Duration,
 		}
 	}
 
 	return assignments, nil
 }
 
-func (s Service) Run(ctx context.Context, path string) ([]WorkerResult, error) {
+// Currently errors are returned from whichever worker returns and error first
+// Eventually we should probably switch this so that we get worker-specific errors
+func (o Orchestrator) Run(ctx context.Context, path string) ([]WorkerResult, error) {
 
-	if s.provisioner == nil {
+	if o.provisioner == nil {
 		return nil, fmt.Errorf("worker provisioner is required")
 	}
 
-	spec, err := s.LoadTestSpec(ctx, path)
+	spec, err := o.LoadTestSpec(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 
-	assignments, err := s.CreateWorkerAssignments(*spec)
+	assignments, err := o.CreateWorkerAssignments(*spec)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +97,7 @@ func (s Service) Run(ctx context.Context, path string) ([]WorkerResult, error) {
 		go func(i int, assignment WorkerAssignment) {
 			defer wg.Done()
 
-			result, err := s.provisioner.RunWorker(ctx, assignment)
+			result, err := o.provisioner.RunWorker(ctx, assignment)
 			if err != nil {
 				errors <- err
 				return
