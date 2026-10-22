@@ -3,6 +3,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -68,8 +69,6 @@ func (Orchestrator) CreateWorkerAssignments(testSpec spec.TestSpec) ([]WorkerAss
 	return assignments, nil
 }
 
-// Currently errors are returned from whichever worker returns and error first
-// Eventually we should probably switch this so that we get worker-specific errors
 func (o Orchestrator) Run(ctx context.Context, path string) ([]WorkerResult, error) {
 
 	if o.provisioner == nil {
@@ -87,7 +86,7 @@ func (o Orchestrator) Run(ctx context.Context, path string) ([]WorkerResult, err
 	}
 
 	results := make([]WorkerResult, len(assignments))
-	errors := make(chan error, len(assignments))
+	workerErrors := make(chan error, len(assignments))
 
 	var wg sync.WaitGroup
 
@@ -99,7 +98,12 @@ func (o Orchestrator) Run(ctx context.Context, path string) ([]WorkerResult, err
 
 			result, err := o.provisioner.RunWorker(ctx, assignment)
 			if err != nil {
-				errors <- err
+				workerErr := fmt.Errorf("worker: %s: %w", assignment.WorkerID, err)
+				results[i] = WorkerResult{
+					WorkerID: assignment.WorkerID,
+					Error:    workerErr,
+				}
+				workerErrors <- workerErr
 				return
 			}
 
@@ -108,13 +112,12 @@ func (o Orchestrator) Run(ctx context.Context, path string) ([]WorkerResult, err
 	}
 
 	wg.Wait()
-	close(errors)
+	close(workerErrors)
 
-	for err := range errors {
-		if err != nil {
-			return nil, err
-		}
+	var errs []error
+	for err := range workerErrors {
+		errs = append(errs, err)
 	}
 
-	return results, nil
+	return results, errors.Join(errs...)
 }
