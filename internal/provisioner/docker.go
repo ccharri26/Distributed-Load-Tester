@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/ccharri26/Distributed-Load-Tester/internal/orchestrator"
@@ -33,7 +34,7 @@ func NewDocker(workerImage string) (*DockerProvisioner, error) {
 	}, nil
 }
 
-func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrator.WorkerAssignment) (orchestrator.WorkerResult, error) {
+func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrator.WorkerAssignment) (result orchestrator.WorkerResult, err error) {
 	assignmentJSON, err := json.Marshal((assignment))
 	if err != nil {
 		return orchestrator.WorkerResult{}, fmt.Errorf("marhsal assignment: %w", err)
@@ -53,11 +54,16 @@ func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrat
 		return orchestrator.WorkerResult{}, fmt.Errorf("create worker %q: %w", assignment.WorkerID, err)
 	}
 
-	defer p.client.ContainerRemove(
-		context.Background(),
-		created.ID,
-		client.ContainerRemoveOptions{Force: true},
-	)
+	defer func() {
+		_, removeErr := p.client.ContainerRemove(
+			context.Background(),
+			created.ID,
+			client.ContainerRemoveOptions{Force: true},
+		)
+		if removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("remove worker %q: %w", assignment.WorkerID, removeErr))
+		}
+	}()
 
 	if _, err := p.client.ContainerStart(
 		ctx,
@@ -99,7 +105,11 @@ func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrat
 		return orchestrator.WorkerResult{}, fmt.Errorf("read worker %q logs: %w", assignment.WorkerID, err)
 	}
 
-	defer logs.Close()
+	defer func() {
+		if closeErr := logs.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close worker %q logs: %w", assignment.WorkerID, closeErr))
+		}
+	}()
 
 	var stdout, stderr bytes.Buffer
 	if _, err := stdcopy.StdCopy(&stdout, &stderr, logs); err != nil {
@@ -120,7 +130,6 @@ func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrat
 		)
 	}
 
-	var result orchestrator.WorkerResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		return orchestrator.WorkerResult{}, fmt.Errorf(
 			"decode worker %q result: %w; stderr: %s",
