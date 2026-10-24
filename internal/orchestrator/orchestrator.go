@@ -99,10 +99,9 @@ func (o Orchestrator) Run(ctx context.Context, path string) ([]WorkerResult, err
 			result, err := o.provisioner.RunWorker(ctx, assignment)
 			if err != nil {
 				workerErr := fmt.Errorf("worker: %s: %w", assignment.WorkerID, err)
-				results[i] = WorkerResult{
-					WorkerID: assignment.WorkerID,
-					Error:    workerErr,
-				}
+				result.WorkerID = assignment.WorkerID
+				result.Error = workerErr
+				results[i] = result
 				workerErrors <- workerErr
 				return
 			}
