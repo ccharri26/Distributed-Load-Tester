@@ -16,7 +16,7 @@ RUN go build -o worker ./cmd/worker
 FROM debian:bookworm-slim
 
 # add general CA Certs file to container
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/app/lists/*
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists*
 RUN curl -o /usr/local/share/ca-certificates/mozilla-cacert.crt https://curl.se
 RUN update-ca-certificates
 
