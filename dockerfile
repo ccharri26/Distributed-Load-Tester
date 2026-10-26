@@ -1,5 +1,5 @@
 # Build with:
-# docker build -t load-tester-worker:test .
+# docker build -f dockerfile -t load-tester-worker:test .
 # The image name must match the WorkerImage passed to NewDocker in the orchestrator.
 
 FROM golang:1.26.5 AS build
