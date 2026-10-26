@@ -1,0 +1,143 @@
+package provisioner
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/ccharri26/Distributed-Load-Tester/internal/orchestrator"
+
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
+)
+
+type DockerProvisioner struct {
+	WorkerImage string
+	client      client.APIClient
+}
+
+func NewDocker(workerImage string) (*DockerProvisioner, error) {
+	dockerClient, err := client.New(
+		client.FromEnv,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("create Docker client: %w", err)
+	}
+
+	return &DockerProvisioner{
+		WorkerImage: workerImage,
+		client:      dockerClient,
+	}, nil
+}
+
+func (p *DockerProvisioner) RunWorker(ctx context.Context, assignment orchestrator.WorkerAssignment) (result orchestrator.WorkerResult, err error) {
+	assignmentJSON, err := json.Marshal((assignment))
+	if err != nil {
+		return orchestrator.WorkerResult{}, fmt.Errorf("marhsal assignment: %w", err)
+	}
+
+	// Creates container with the LOAD_TEST_ASSIGNMENT in env of container.
+	created, err := p.client.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Image: p.WorkerImage,
+		Config: &container.Config{
+			Env: []string{
+				"LOAD_TEST_ASSIGNMENT=" + string(assignmentJSON),
+			},
+		},
+	})
+
+	if err != nil {
+		return orchestrator.WorkerResult{}, fmt.Errorf("create worker %q: %w", assignment.WorkerID, err)
+	}
+
+	defer func() {
+		_, removeErr := p.client.ContainerRemove(
+			context.Background(),
+			created.ID,
+			client.ContainerRemoveOptions{Force: true},
+		)
+		if removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("remove worker %q: %w", assignment.WorkerID, removeErr))
+		}
+	}()
+
+	if _, err := p.client.ContainerStart(
+		ctx,
+		created.ID,
+		client.ContainerStartOptions{},
+	); err != nil {
+		return orchestrator.WorkerResult{}, fmt.Errorf(
+			"start worker %q: %w",
+			assignment.WorkerID,
+			err,
+		)
+	}
+
+	wait := p.client.ContainerWait(
+		ctx,
+		created.ID,
+		client.ContainerWaitOptions{},
+	)
+
+	var statusCode int64
+
+	select {
+	case err := <-wait.Error:
+		if err != nil {
+			return orchestrator.WorkerResult{}, fmt.Errorf(
+				"wait for worker %q: %w",
+				assignment.WorkerID,
+				err,
+			)
+		}
+
+	case status := <-wait.Result:
+		statusCode = status.StatusCode
+	}
+
+	logs, err := p.client.ContainerLogs(ctx, created.ID, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
+
+	if err != nil {
+		return orchestrator.WorkerResult{}, fmt.Errorf("read worker %q logs: %w", assignment.WorkerID, err)
+	}
+
+	defer func() {
+		if closeErr := logs.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close worker %q logs: %w", assignment.WorkerID, closeErr))
+		}
+	}()
+
+	var stdout, stderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, logs); err != nil {
+		return orchestrator.WorkerResult{}, fmt.Errorf(
+			"copy worker %q logs: %w",
+			assignment.WorkerID,
+			err,
+		)
+	}
+
+	if statusCode != 0 {
+		return orchestrator.WorkerResult{}, fmt.Errorf(
+			"worker %q exited with status %d; stderr: %s; stdout: %s",
+			assignment.WorkerID,
+			statusCode,
+			stderr.String(),
+			stdout.String(),
+		)
+	}
+
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		return orchestrator.WorkerResult{}, fmt.Errorf(
+			"decode worker %q result: %w; stderr: %s",
+			assignment.WorkerID,
+			err,
+			stderr.String(),
+		)
+	}
+
+	return result, nil
+}
